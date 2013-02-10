@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+
+from datetime import date
+import argparse
+import os
+import shutil
+import sys
+
+HEADER = """Copyright %(year)s %(author)s
+
+This file is part of %(project)s.
+
+%(project)s is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+%(project)s is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with %(project)s.  If not, see <http://www.gnu.org/licenses/>."""
+
+FORMAT_C      = ('/*\n', ' * ', ' */\n')
+FORMAT_JAVA   = FORMAT_C
+FORMAT_SHELL  = ('', '# ', '')
+FORMAT_PYTHON = FORMAT_SHELL
+
+FORMATS = {
+    'c'     : FORMAT_C,
+    'java'  : FORMAT_JAVA,
+    'shell' : FORMAT_SHELL,
+    'python': FORMAT_PYTHON,
+    }
+
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--project', metavar='PROJECT', type=str, required=True, help='The project name.')
+    parser.add_argument('-f', '--format', metavar='FORMAT', type=str, default='C', help='The comment format to be used by the program.')
+    parser.add_argument('-a', '--author', metavar='AUTHOR', type=str, required=True, help='The project author.')
+    parser.add_argument('-y', '--year', metavar='YEAR', type=int, default=None, help='The year of the project copyright.')
+    parser.add_argument('files', metavar='FILES', type=str, nargs='+', help='The list of files that need a license header.')
+    return parser.parse_args(argv[1:])
+
+def copy_file(file_path):
+    file_name     = os.path.basename(file_path)
+    tmp_file_name = '.' + file_name + '.gnufmt'
+    tmp_file_path = os.path.join(os.path.dirname(file_path), tmp_file_name)
+    shutil.copyfile(file_path, tmp_file_path)
+    return tmp_file_path
+
+def add_license_header(file_path, header):
+    tmp_file_path = copy_file(file_path)
+    with open(tmp_file_path) as input, open(file_path, 'w') as output:
+        output.write(header)
+        output.write(input.read())
+
+def make_license_header(config):
+    args = {
+        'year'   : config.year,
+        'project': config.project,
+        'author' : config.author,
+        }
+    format = FORMATS[config.format]
+    header = ''
+    header += format[0]
+    for line in HEADER.split('\n'):
+        header += format[1]
+        header += line
+        header += '\n'
+    header += format[2]
+    return header % args
+
+def main(argv):
+    config = parse_arguments(argv)
+
+    if config.year is None:
+        config.year = date.today().year
+
+    config.format = config.format.lower()
+
+    if not config.format in FORMATS:
+        print "%s: invalid format: should be one of %s" % (config.format, ', '.join(["'%s'" % f for f in FORMATS]))
+        sys.exit(1)
+
+    header = make_license_header(config)
+
+    for file_path in config.files:
+        try:
+            print '-', file_path
+            add_license_header(file_path, header)
+        except Exception as e:
+            print "%s: %s" % (file_path, e)
+
+if __name__ == '__main__':
+    main(sys.argv)
